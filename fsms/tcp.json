@@ -1,0 +1,284 @@
+{
+  "name": "TCP",
+  "description": "Máquina de Estados Finitos do TCP (RFC 793 / Kurose & Ross Figuras 3.41 e 3.42)",
+  "initialState": "CLOSED",
+  "states": [
+    { "id": "CLOSED", "label": "CLOSED", "description": "Conexão fechada / inexistente" },
+    { "id": "LISTEN", "label": "LISTEN", "description": "Aguardando solicitação de conexão (abertura passiva)" },
+    { "id": "SYN_SENT", "label": "SYN_SENT", "description": "SYN enviado, aguardando SYN-ACK (abertura ativa)" },
+    { "id": "SYN_RCVD", "label": "SYN_RCVD", "description": "SYN recebido, SYN-ACK enviado, aguardando ACK" },
+    { "id": "ESTABLISHED", "label": "ESTABLISHED", "description": "Conexão aberta, transferência de dados bidirecional" },
+    { "id": "FIN_WAIT_1", "label": "FIN_WAIT_1", "description": "FIN enviado, aguardando ACK ou FIN" },
+    { "id": "FIN_WAIT_2", "label": "FIN_WAIT_2", "description": "ACK do FIN recebido, aguardando FIN remoto" },
+    { "id": "CLOSING", "label": "CLOSING", "description": "Fechamento simultâneo: aguardando ACK do FIN" },
+    { "id": "TIME_WAIT", "label": "TIME_WAIT", "description": "Aguardando 2*MSL para garantir entrega do ACK" },
+    { "id": "CLOSE_WAIT", "label": "CLOSE_WAIT", "description": "FIN recebido, aguardando fechamento pela aplicação local" },
+    { "id": "LAST_ACK", "label": "LAST_ACK", "description": "FIN enviado após CLOSE_WAIT, aguardando ACK final" }
+  ],
+  "transitions": [
+    {
+      "from": "CLOSED",
+      "event": "APPL_LISTEN",
+      "condition": null,
+      "action": "LISTEN",
+      "to": "LISTEN",
+      "description": "Aplicação inicia escuta passiva"
+    },
+    {
+      "from": "CLOSED",
+      "event": "APPL_CONNECT",
+      "condition": null,
+      "action": "SEND_SYN",
+      "to": "SYN_SENT",
+      "description": "Aplicação inicia conexão ativa enviando SYN"
+    },
+    {
+      "from": "CLOSED",
+      "event": "RECV_SEGMENT",
+      "condition": "!is_rst",
+      "action": "SEND_RST",
+      "to": "CLOSED",
+      "description": "Segmento recebido em porta fechada: responde com RST"
+    },
+    {
+      "from": "LISTEN",
+      "event": "RECV_SYN",
+      "condition": "valid_checksum",
+      "action": "SEND_SYN_ACK",
+      "to": "SYN_RCVD",
+      "description": "Recebeu SYN: envia SYN-ACK"
+    },
+    {
+      "from": "LISTEN",
+      "event": "APPL_CLOSE",
+      "condition": null,
+      "action": "CLOSE",
+      "to": "CLOSED",
+      "description": "Aplicação fecha porta em escuta"
+    },
+    {
+      "from": "SYN_SENT",
+      "event": "RECV_SYN_ACK",
+      "condition": "valid_checksum && valid_ack",
+      "action": "SEND_ACK",
+      "to": "ESTABLISHED",
+      "description": "Handshake 3 vias concluído no cliente"
+    },
+    {
+      "from": "SYN_SENT",
+      "event": "RECV_SYN",
+      "condition": "valid_checksum",
+      "action": "SEND_SYN_ACK",
+      "to": "SYN_RCVD",
+      "description": "Abertura simultânea: recebeu SYN enquanto aguardava SYN-ACK"
+    },
+    {
+      "from": "SYN_SENT",
+      "event": "TIMEOUT_SYN",
+      "condition": null,
+      "action": "RETRANSMIT_SYN",
+      "to": "SYN_SENT",
+      "description": "Estouro de timeout: retransmite SYN"
+    },
+    {
+      "from": "SYN_SENT",
+      "event": "APPL_CLOSE",
+      "condition": null,
+      "action": "CLOSE",
+      "to": "CLOSED",
+      "description": "Aplicação aborta conexão"
+    },
+    {
+      "from": "SYN_SENT",
+      "event": "RECV_RST",
+      "condition": null,
+      "action": "RESET_CONNECTION",
+      "to": "CLOSED",
+      "description": "Conexão rejeitada pelo servidor com RST"
+    },
+    {
+      "from": "SYN_RCVD",
+      "event": "RECV_ACK",
+      "condition": "valid_checksum && valid_ack",
+      "action": "ESTABLISH",
+      "to": "ESTABLISHED",
+      "description": "Handshake 3 vias concluído no servidor"
+    },
+    {
+      "from": "SYN_RCVD",
+      "event": "TIMEOUT_SYN_ACK",
+      "condition": null,
+      "action": "RETRANSMIT_SYN_ACK",
+      "to": "SYN_RCVD",
+      "description": "Estouro de timeout: retransmite SYN-ACK"
+    },
+    {
+      "from": "SYN_RCVD",
+      "event": "APPL_CLOSE",
+      "condition": null,
+      "action": "SEND_FIN",
+      "to": "FIN_WAIT_1",
+      "description": "Aplicação fecha conexão durante handshake"
+    },
+    {
+      "from": "SYN_RCVD",
+      "event": "RECV_RST",
+      "condition": null,
+      "action": "RETURN_TO_LISTEN",
+      "to": "LISTEN",
+      "description": "Reset recebido: retorna ao estado de escuta"
+    },
+    {
+      "from": "ESTABLISHED",
+      "event": "APPL_SEND_DATA",
+      "condition": null,
+      "action": "SEND_DATA",
+      "to": "ESTABLISHED",
+      "description": "Aplicação envia dados"
+    },
+    {
+      "from": "ESTABLISHED",
+      "event": "RECV_DATA",
+      "condition": "valid_checksum",
+      "action": "PROCESS_DATA_AND_SEND_ACK",
+      "to": "ESTABLISHED",
+      "description": "Recebe dados válidos e envia ACK cumulativo"
+    },
+    {
+      "from": "ESTABLISHED",
+      "event": "RECV_ACK",
+      "condition": "valid_checksum",
+      "action": "PROCESS_ACK",
+      "to": "ESTABLISHED",
+      "description": "Recebe ACK e atualiza estimador RTT"
+    },
+    {
+      "from": "ESTABLISHED",
+      "event": "TIMEOUT_DATA",
+      "condition": null,
+      "action": "RETRANSMIT_DATA",
+      "to": "ESTABLISHED",
+      "description": "Estouro de temporizador de retransmissão"
+    },
+    {
+      "from": "ESTABLISHED",
+      "event": "DUP_ACK_3",
+      "condition": null,
+      "action": "FAST_RETRANSMIT",
+      "to": "ESTABLISHED",
+      "description": "3 ACKs duplicados: Retransmissão Rápida sem esperar timeout"
+    },
+    {
+      "from": "ESTABLISHED",
+      "event": "APPL_CLOSE",
+      "condition": null,
+      "action": "SEND_FIN",
+      "to": "FIN_WAIT_1",
+      "description": "Encerramento ativo iniciado localmente"
+    },
+    {
+      "from": "ESTABLISHED",
+      "event": "RECV_FIN",
+      "condition": "valid_checksum",
+      "action": "SEND_ACK",
+      "to": "CLOSE_WAIT",
+      "description": "Encerramento passivo: recebe FIN do host remoto e envia ACK"
+    },
+    {
+      "from": "FIN_WAIT_1",
+      "event": "RECV_ACK",
+      "condition": "valid_checksum && valid_ack",
+      "action": "AWAIT_PEER_FIN",
+      "to": "FIN_WAIT_2",
+      "description": "ACK do FIN recebido: aguardando FIN do peer"
+    },
+    {
+      "from": "FIN_WAIT_1",
+      "event": "RECV_FIN",
+      "condition": "valid_checksum",
+      "action": "SEND_ACK",
+      "to": "CLOSING",
+      "description": "Fechamento simultâneo: recebeu FIN antes do ACK"
+    },
+    {
+      "from": "FIN_WAIT_1",
+      "event": "RECV_FIN_ACK",
+      "condition": "valid_checksum",
+      "action": "SEND_ACK_START_2MSL",
+      "to": "TIME_WAIT",
+      "description": "Recebeu FIN e ACK juntos: vai para TIME_WAIT"
+    },
+    {
+      "from": "FIN_WAIT_1",
+      "event": "TIMEOUT_FIN",
+      "condition": null,
+      "action": "RETRANSMIT_FIN",
+      "to": "FIN_WAIT_1",
+      "description": "Timeout do FIN: retransmite FIN"
+    },
+    {
+      "from": "FIN_WAIT_2",
+      "event": "RECV_FIN",
+      "condition": "valid_checksum",
+      "action": "SEND_ACK_START_2MSL",
+      "to": "TIME_WAIT",
+      "description": "Recebeu FIN do peer: responde ACK e inicia timer 2*MSL"
+    },
+    {
+      "from": "CLOSING",
+      "event": "RECV_ACK",
+      "condition": "valid_checksum && valid_ack",
+      "action": "START_2MSL",
+      "to": "TIME_WAIT",
+      "description": "Fechamento simultâneo: recebeu ACK do seu FIN"
+    },
+    {
+      "from": "TIME_WAIT",
+      "event": "TIMEOUT_2MSL",
+      "condition": null,
+      "action": "CLEANUP_CONNECTION",
+      "to": "CLOSED",
+      "description": "Temporizador 2*MSL expirou: conexão completamente fechada"
+    },
+    {
+      "from": "TIME_WAIT",
+      "event": "RECV_FIN",
+      "condition": "valid_checksum",
+      "action": "SEND_ACK_RESTART_2MSL",
+      "to": "TIME_WAIT",
+      "description": "FIN duplicado recebido: reenvia ACK e reinicia temporizador"
+    },
+    {
+      "from": "CLOSE_WAIT",
+      "event": "APPL_CLOSE",
+      "condition": null,
+      "action": "SEND_FIN",
+      "to": "LAST_ACK",
+      "description": "Aplicação local encerra conexão: envia FIN"
+    },
+    {
+      "from": "CLOSE_WAIT",
+      "event": "APPL_SEND_DATA",
+      "condition": null,
+      "action": "SEND_DATA",
+      "to": "CLOSE_WAIT",
+      "description": "Envio de últimos dados pendentes antes de fechar"
+    },
+    {
+      "from": "LAST_ACK",
+      "event": "RECV_ACK",
+      "condition": "valid_checksum && valid_ack",
+      "action": "CLEANUP_CONNECTION",
+      "to": "CLOSED",
+      "description": "ACK do FIN final recebido: conexão fechada"
+    },
+    {
+      "from": "LAST_ACK",
+      "event": "TIMEOUT_FIN",
+      "condition": null,
+      "action": "RETRANSMIT_FIN",
+      "to": "LAST_ACK",
+      "description": "Timeout do FIN no LAST_ACK: retransmite FIN"
+    }
+  ]
+}

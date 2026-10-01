@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.context.xml
+*.log
+.DS_Store

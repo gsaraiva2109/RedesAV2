@@ -1,0 +1,34 @@
+{
+  "name": "UDP",
+  "description": "FSM de estado único do UDP (RFC 768 / Kurose & Ross Seção 3.3)",
+  "initialState": "OPEN",
+  "states": [
+    { "id": "OPEN", "label": "OPEN", "description": "Porta UDP pronta para envio/recepção sem conexão ou handshake" }
+  ],
+  "transitions": [
+    {
+      "from": "OPEN",
+      "event": "APPL_SEND",
+      "condition": null,
+      "action": "SEND_DATAGRAM",
+      "to": "OPEN",
+      "description": "Envia datagrama com portas, tamanho e checksum calculados"
+    },
+    {
+      "from": "OPEN",
+      "event": "RECV_DATAGRAM",
+      "condition": "valid_checksum",
+      "action": "DELIVER_DATA",
+      "to": "OPEN",
+      "description": "Checksum correto: entrega à aplicação receptora sem ordenar ou responder"
+    },
+    {
+      "from": "OPEN",
+      "event": "RECV_DATAGRAM",
+      "condition": "!valid_checksum",
+      "action": "DROP_SILENTLY",
+      "to": "OPEN",
+      "description": "Checksum inválido: descarta silenciosamente sem avisar remetente"
+    }
+  ]
+}

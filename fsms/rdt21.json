@@ -1,0 +1,61 @@
+{
+  "name": "rdt2.1_Sender",
+  "description": "FSM do remetente do protocolo rdt 2.1 (Kurose & Ross Seção 3.4.1)",
+  "initialState": "WAIT_CALL_0",
+  "states": [
+    { "id": "WAIT_CALL_0", "label": "Wait for call 0 from above", "description": "Espera camada superior com seq=0" },
+    { "id": "WAIT_ACK_0", "label": "Wait for ACK 0", "description": "Espera ACK/NAK do pacote 0" },
+    { "id": "WAIT_CALL_1", "label": "Wait for call 1 from above", "description": "Espera camada superior com seq=1" },
+    { "id": "WAIT_ACK_1", "label": "Wait for ACK 1", "description": "Espera ACK/NAK do pacote 1" }
+  ],
+  "transitions": [
+    {
+      "from": "WAIT_CALL_0",
+      "event": "RDT_SEND",
+      "condition": null,
+      "action": "MAKE_PKT_0_AND_SEND",
+      "to": "WAIT_ACK_0",
+      "description": "Cria pacote 0 com checksum e envia"
+    },
+    {
+      "from": "WAIT_ACK_0",
+      "event": "RDT_RCV",
+      "condition": "corrupt || isNAK",
+      "action": "UDT_SEND_PKT_0",
+      "to": "WAIT_ACK_0",
+      "description": "Corrompido ou NAK: retransmite pacote 0"
+    },
+    {
+      "from": "WAIT_ACK_0",
+      "event": "RDT_RCV",
+      "condition": "not_corrupt && isACK",
+      "action": "NOOP",
+      "to": "WAIT_CALL_1",
+      "description": "ACK 0 íntegro recebido: avança para seq=1"
+    },
+    {
+      "from": "WAIT_CALL_1",
+      "event": "RDT_SEND",
+      "condition": null,
+      "action": "MAKE_PKT_1_AND_SEND",
+      "to": "WAIT_ACK_1",
+      "description": "Cria pacote 1 com checksum e envia"
+    },
+    {
+      "from": "WAIT_ACK_1",
+      "event": "RDT_RCV",
+      "condition": "corrupt || isNAK",
+      "action": "UDT_SEND_PKT_1",
+      "to": "WAIT_ACK_1",
+      "description": "Corrompido ou NAK: retransmite pacote 1"
+    },
+    {
+      "from": "WAIT_ACK_1",
+      "event": "RDT_RCV",
+      "condition": "not_corrupt && isACK",
+      "action": "NOOP",
+      "to": "WAIT_CALL_0",
+      "description": "ACK 1 íntegro recebido: avança para seq=0"
+    }
+  ]
+}
